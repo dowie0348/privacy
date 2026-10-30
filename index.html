@@ -1,0 +1,433 @@
+<!DOCTYPE html>
+<html lang="ko"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' 'unsafe-inline' 'unsafe-eval' 'wasm-unsafe-eval' blob: https://cdn.jsdelivr.net; worker-src blob:; style-src 'unsafe-inline'; img-src blob: data:; media-src blob:; connect-src https://cdn.jsdelivr.net https://tessdata.projectnaptha.com https://storage.googleapis.com data: blob:; form-action 'none'">
+<title>개인정보 가리미</title>
+<style>
+:root{--p:#2563eb;--bg:#f4f7fb;--ok:#16a34a;--bad:#dc2626}
+*{box-sizing:border-box}body{margin:0;font-family:system-ui,"Malgun Gothic",sans-serif;background:var(--bg);color:#1e293b}
+header{background:#1e3a8a;color:#fff;padding:18px 16px}header h1{margin:0;font-size:22px}header p{margin:6px 0 0;font-size:14px;opacity:.9}
+main{max-width:960px;margin:0 auto;padding:14px}
+.card{background:#fff;border-radius:14px;padding:14px;margin-bottom:14px;box-shadow:0 1px 4px #0001}
+.tabs{display:flex;gap:8px;margin-bottom:12px}.tabs button{flex:1;padding:14px;font-size:17px;border:2px solid var(--p);background:#fff;color:var(--p);border-radius:12px;font-weight:700}
+.tabs button.on{background:var(--p);color:#fff}
+.drop{border:3px dashed #94a3b8;border-radius:14px;padding:30px 10px;text-align:center;font-size:16px;cursor:pointer;background:#f8fafc}
+.drop.hv{border-color:var(--p);background:#eff6ff}
+label.o{display:block;margin:6px 0;font-size:15px}
+textarea,input[type=text]{width:100%;padding:10px;font-size:15px;border:1px solid #cbd5e1;border-radius:10px;font-family:inherit}
+textarea{min-height:150px}
+.btn{padding:12px 16px;font-size:16px;border:0;border-radius:10px;background:var(--p);color:#fff;font-weight:700;margin:4px 4px 0 0}
+.btn.g{background:var(--ok)}.btn.s{background:#64748b}
+.item h3{margin:0 0 6px;font-size:15px;word-break:break-all}
+canvas{max-width:100%;height:auto;border:1px solid #cbd5e1;border-radius:8px;touch-action:none;cursor:crosshair}
+.hint{font-size:13px;color:#475569;margin:4px 0}.st{font-size:14px;color:var(--p);margin:6px 0}
+.safe{background:#ecfdf5;border:1px solid #86efac;padding:10px;border-radius:10px;font-size:14px;margin-bottom:14px}
+.cnt{font-size:13px;color:#475569}
+</style></head><body>
+<header><h1>🔒 개인정보 가리미</h1><p>모든 처리는 내 기기(브라우저) 안에서만 이루어집니다. 파일은 서버로 전송·저장되지 않으며, 창을 닫거나 새로고침하면 모두 사라집니다.</p></header>
+<main>
+<div class="safe">✔ 업로드 서버 없음 · ✔ 저장소(쿠키/로컬스토리지) 미사용 · ✔ 닫으면 즉시 삭제<br>※ 최초 실행 시 인식 엔진(OCR·얼굴 모델)만 인터넷에서 내려받으며, <b>내 자료는 전송되지 않습니다.</b></div>
+
+<div class="card">
+ <b>① 가릴 대상 설정</b>
+ <label class="o"><input type="checkbox" id="oRrn" checked> 주민·외국인등록번호</label>
+ <label class="o"><input type="checkbox" id="oPh" checked> 전화번호 · 이메일</label>
+ <label class="o"><input type="checkbox" id="oFace" checked> 얼굴 (사진)</label>
+ <label class="o" style="margin-left:24px">얼굴 탐색 강도: <select id="fq" style="font-size:15px;padding:6px"><option value="0">빠름 (큰 얼굴만)</option><option value="1">보통</option><option value="2" selected>정밀 (단체사진·작은 얼굴, 느림)</option></select></label>
+ <label class="o"><input type="checkbox" id="oGuess"> 이름 자동 추정 (성씨+이름 형태, 오탐 가능)</label>
+ <div class="hint">학생 이름 명단(쉼표·줄바꿈 구분) — 입력하면 가장 정확합니다. 예: 김민빈, 이서준</div>
+ <textarea id="names" style="min-height:70px" placeholder="김민빈, 이서준, 박지우"></textarea>
+ <div style="margin-top:6px"><button class="btn s" id="rosterBtn">📊 엑셀/CSV 명단 불러오기</button><span class="cnt" id="rosterMsg"></span></div>
+ <input type="file" id="roster" accept=".xlsx,.xls,.csv" hidden>
+ <div class="hint">‘이름·성명’ 열이 있으면 그 열만, 없으면 한글 2~4자 칸을 모두 가져옵니다. 불러온 뒤 목록을 확인·수정하세요. 엑셀 파일도 서버로 전송되지 않습니다.</div>
+ <label class="o">이미지 가림 방식:
+  <select id="mode" style="font-size:15px;padding:6px"><option value="mosaic">모자이크</option><option value="black">검정 박스</option></select></label>
+</div>
+
+<div class="tabs"><button id="tImg" class="on">🖼 이미지·문서(PDF/HWPX/엑셀)</button><button id="tTxt">📝 텍스트</button></div>
+
+<section id="pImg" class="card">
+ <div class="drop" id="drop">여기에 파일을 끌어놓거나 눌러서 선택<br><small>이미지(JPG·PNG·WEBP) · PDF · HWPX · 엑셀(XLSX) (여러 개 가능, 휴대폰은 사진 촬영도 가능)</small></div>
+ <input type="file" id="file" accept="image/*,.pdf,application/pdf,.hwpx,.xlsx" multiple hidden>
+ <div class="hint">자동 인식 후 <b>미리보기에서 드래그하면 가림 영역 추가</b>, <b>상자를 누르면 해제/복원</b>됩니다. 자동 인식은 100% 정확하지 않으니 반드시 확인 후 저장하세요.</div>
+ <div id="list"></div>
+ <button class="btn g" id="dlAll" style="display:none">⬇ 전체 저장</button>
+</section>
+
+<section id="pTxt" class="card" style="display:none">
+ <textarea id="tin" placeholder="텍스트를 붙여넣거나 아래에서 .txt/.csv 파일을 불러오세요"></textarea>
+ <input type="file" id="tfile" accept=".txt,.csv,.md,text/plain" style="margin-top:8px">
+ <div><button class="btn" id="tgo">가리기</button></div>
+ <textarea id="tout" readonly placeholder="결과"></textarea>
+ <div class="cnt" id="tcnt"></div>
+ <button class="btn g" id="tdl">⬇ 텍스트 파일 저장</button>
+ <button class="btn s" id="tcp">복사</button>
+</section>
+<button class="btn s" onclick="if(confirm('모든 자료를 지우고 초기화할까요?'))location.reload()">🗑 지금 전부 지우기</button>
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script type="module">
+let fd=null,fdTried=false;
+async function getFD(){
+  if(fdTried)return fd;fdTried=true;
+  try{
+    const m=await import('https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/vision_bundle.mjs');
+    const v=await m.FilesetResolver.forVisionTasks('https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm');
+    // 수정됨: 얼굴 인식 신뢰도(minDetectionConfidence)를 0.3에서 0.6으로 높여 엄격하게 판별 (오탐 감소)
+    fd=await m.FaceDetector.createFromOptions(v,{baseOptions:{modelAssetPath:'https://storage.googleapis.com/mediapipe-models/face_detector/blaze_face_short_range/float16/1/blaze_face_short_range.tflite'},runningMode:'IMAGE',minDetectionConfidence:.6});
+  }catch(e){console.warn(e);fd=null}
+  return fd;
+}
+const $=id=>document.getElementById(id);
+// ---------- 얼굴 인식 (전체 + 타일 분할 다중 스캔) ----------
+function iou(a,b){const x1=Math.max(a.x,b.x),y1=Math.max(a.y,b.y),x2=Math.min(a.x+a.w,b.x+b.w),y2=Math.min(a.y+a.h,b.y+b.h);const i=Math.max(0,x2-x1)*Math.max(0,y2-y1);const u=a.w*a.h+b.w*b.h-i;const m=Math.min(a.w*a.h,b.w*b.h);return[i/u,i/m]}
+function nms(L){L.sort((a,b)=>b.score-a.score);const o=[];for(const b of L){if(!o.some(k=>{const[u,m]=iou(k,b);return u>.3||m>.6}))o.push(b)}return o}
+async function detectFaces(src,level,st){
+  const d=await getFD();if(!d)return null;
+  const W=src.width,H=src.height,found=[];
+  const tc=document.createElement('canvas'),tx=tc.getContext('2d');
+  const addDet=(r,ox,oy,tw,th,whole)=>{for(const k of r.detections){const b=k.boundingBox,sc=k.categories[0].score;
+    if(b.width<8||b.height<8)continue;
+    const ar=b.width/b.height;if(ar<.5||ar>1.8)continue;
+    if(!whole&&((b.originX<3&&ox>0)||(b.originY<3&&oy>0)||(b.originX+b.width>tw-3&&ox+tw<W)||(b.originY+b.height>th-3&&oy+th<H)))continue; // 타일 경계에 잘린 얼굴 제외
+    found.push({x:ox+b.originX,y:oy+b.originY,w:b.width,h:b.height,score:sc})}};
+  addDet(d.detect(src),0,0,W,H,true);
+  if(level>0){
+    const grids=(level==1?[2,3]:[2,3,4,6,8,11]).filter(n=>Math.min(W,H)/(1+.6*(n-1))>=110);
+    const jobs=[];
+    for(const n of grids){
+      const s=Math.min(W,H)/(1+.6*(n-1)),step=.6*s;
+      const nx=Math.max(1,Math.ceil((W-s)/step)+1),ny=Math.max(1,Math.ceil((H-s)/step)+1);
+      for(let j=0;j<ny;j++)for(let i=0;i<nx;i++){
+        const x=Math.min(i*step,Math.max(0,W-s)),y=Math.min(j*step,Math.max(0,H-s));
+        jobs.push([Math.round(x),Math.round(y),Math.round(Math.min(s,W-x)),Math.round(Math.min(s,H-y))]);
+      }
+    }
+    let k=0;
+    for(const [x,y,w,h] of jobs){
+      tc.width=w;tc.height=h;
+      tx.drawImage(src,x,y,w,h,0,0,tc.width,tc.height);
+      try{addDet(d.detect(tc),x,y,w,h,false)}catch(e){}
+      if(++k%8==0){if(st)st.textContent='얼굴 정밀 탐색 중… '+Math.round(k/jobs.length*100)+'%';await new Promise(r=>setTimeout(r))}
+    }
+  }
+  return nms(found);
+}
+// ---------- 텍스트 규칙 ----------
+const SUR='김이박최정강조윤장임한오서신권황안송류전홍고문양손배백허유남심노하곽성차주우구민나진지엄채원천방공현함변염여추도소석선설마길연위표명기반왕금옥육인맹제모탁국어은편용예경봉사부황';
+const RRN=/\d{6}\s*[-–]\s*[1-8]\d{6}|\b\d{6}[1-8]\d{6}\b/g;
+// 수정됨: 전화번호 정규식에 부정형 전후방 탐색 추가 (긴 숫자 일부 매칭 방지)
+const PH=/(?<!\d)(01[016789][-.\s]?\d{3,4}[-.\s]?\d{4}|0\d{1,2}[-.\s]\d{3,4}[-.\s]\d{4})(?!\d)/g;
+const EM=/[\w.+-]+@[\w-]+(\.[\w-]+)+/g;
+function nameList(){return $('names').value.split(/[,\n、;]+/).map(s=>s.trim()).filter(s=>s.length>=2)}
+function maskName(n){return n.length==2?n[0]+'*':n[0]+'*'.repeat(n.length-2)+n[n.length-1]}
+function maskText(t){
+  let c=0;const bump=s=>(c++,s);
+  if($('oRrn').checked)t=t.replace(RRN,m=>bump(m.replace(/\d/g,'*')));
+  if($('oPh').checked){t=t.replace(PH,m=>bump(m.replace(/\d(?=[\d\-.\s]*\d{4}$)/g,'*')));t=t.replace(EM,m=>bump('***@***'))}
+  for(const n of nameList().sort((a,b)=>b.length-a.length)){
+    t=t.replace(new RegExp(n.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'),'g'),()=>bump(maskName(n)));
+  }
+  if($('oGuess').checked){
+    // 수정됨: 이름 길이를 성+이름 2글자로 고정 (3글자 이름만 추정, '이상', '정말' 등 일반단어 오탐 방지)
+    t=t.replace(new RegExp(`(?<![가-힣])([${SUR}][가-힣]{2})(?=\\s|$|[이가은는을를의에께야아도와과,.!?)])`,'g'),(m)=>{
+      if(/\*/.test(m))return m;return bump(maskName(m))});
+  }
+  return [t,c];
+}
+// ---------- 탭 ----------
+$('tImg').onclick=()=>{$('pImg').style.display='';$('pTxt').style.display='none';$('tImg').className='on';$('tTxt').className=''};
+$('tTxt').onclick=()=>{$('pTxt').style.display='';$('pImg').style.display='none';$('tTxt').className='on';$('tImg').className=''};
+// ---------- 텍스트 ----------
+$('tgo').onclick=()=>{const [r,c]=maskText($('tin').value);$('tout').value=r;$('tcnt').textContent=c+'곳 가림 처리됨 — 결과를 꼭 확인하세요.'};
+$('tfile').onchange=async e=>{const f=e.target.files[0];if(f){$('tin').value=await f.text()}};
+$('tcp').onclick=()=>navigator.clipboard.writeText($('tout').value);
+function save(blob,name){const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),4000)}
+$('tdl').onclick=()=>save(new Blob([$('tout').value],{type:'text/plain;charset=utf-8'}),'가림처리_텍스트.txt');
+// ---------- 이미지 ----------
+let worker=null;
+async function getWorker(st){
+  if(worker)return worker;
+  worker=await Tesseract.createWorker('kor+eng',1,{logger:m=>{if(m.status&&st)st.textContent='글자 인식 준비/진행: '+m.status+' '+Math.round((m.progress||0)*100)+'%'}});
+  return worker;
+}
+
+const drop=$('drop'),file=$('file');
+drop.onclick=()=>file.click();
+drop.ondragover=e=>{e.preventDefault();drop.classList.add('hv')};
+drop.ondragleave=()=>drop.classList.remove('hv');
+drop.ondrop=e=>{e.preventDefault();drop.classList.remove('hv');add([...e.dataTransfer.files])};
+file.onchange=()=>{add([...file.files]);file.value=''};
+// ---- 명단 ----
+$('rosterBtn').onclick=()=>$('roster').click();
+$('roster').onchange=async e=>{
+  const f=e.target.files[0];e.target.value='';if(!f)return;
+  try{
+    const wb=XLSX.read(await f.arrayBuffer(),{type:'array'});const out=new Set();
+    for(const sn of wb.SheetNames){
+      const rows=XLSX.utils.sheet_to_json(wb.Sheets[sn],{header:1,defval:''});
+      let col=-1,hr=-1;
+      rows.slice(0,10).some((r,i)=>{const j=r.findIndex(c=>/^(학생)?\s*(이름|성명)$/.test(String(c).trim()));if(j>=0){col=j;hr=i;return true}});
+      if(col>=0)rows.slice(hr+1).forEach(r=>{const v=String(r[col]).trim().replace(/\s/g,'');if(/^[가-힣]{2,5}$/.test(v))out.add(v)});
+      else rows.forEach(r=>r.forEach(c=>{const v=String(c).trim().replace(/\s/g,'');if(/^[가-힣]{2,4}$/.test(v)&&!/^(이름|성명|번호|학년|비고|성별)$/.test(v))out.add(v)}));
+    }
+    const old=nameList();const all=[...new Set([...old,...out])];
+    $('names').value=all.join(', ');$('rosterMsg').textContent=` ${out.size}명 불러옴 (총 ${all.length}명)`;
+  }catch(err){console.error(err);$('rosterMsg').textContent=' 파일을 읽지 못했습니다. .xlsx 또는 .csv인지 확인하세요.'}
+};
+// ---- 렌더/박스 ----
+function render(it,forExport){
+  const c=it.canvas,x=c.getContext('2d');
+  x.drawImage(it.bmp,0,0);
+  const mode=$('mode').value;
+  for(const b of it.boxes){
+    if(!b.on)continue;
+    if(mode=='black'){x.fillStyle='#000';x.fillRect(b.x,b.y,b.w,b.h)}
+    else{
+      const t=document.createElement('canvas'),s=Math.max(8,Math.min(b.w,b.h)/4);
+      t.width=Math.max(1,Math.round(b.w/s));t.height=Math.max(1,Math.round(b.h/s));
+      t.getContext('2d').drawImage(it.bmp,b.x,b.y,b.w,b.h,0,0,t.width,t.height);
+      x.imageSmoothingEnabled=false;x.drawImage(t,0,0,t.width,t.height,b.x,b.y,b.w,b.h);x.imageSmoothingEnabled=true;
+    }
+  }
+  if(!forExport){
+    x.lineWidth=Math.max(2,c.width/400);
+    for(const b of it.boxes){x.strokeStyle=b.on?'#ef4444':'#94a3b8';x.setLineDash(b.on?[]:[8,6]);x.strokeRect(b.x,b.y,b.w,b.h)}
+    x.setLineDash([]);
+  }
+}
+function pad(b,W,H,p){const x=Math.max(0,b.x-p),y=Math.max(0,b.y-p);return{...b,x,y,w:Math.min(W-x,b.w+2*p),h:Math.min(H-y,b.h+2*p),on:true}}
+function card(title){const d=document.createElement('div');d.className='card item';const h=document.createElement('h3');h.textContent=title;const st=document.createElement('div');st.className='st';d.append(h,st);return[d,st]}
+const wait=ms=>new Promise(r=>setTimeout(r,ms));
+const toBlob=(c,type,q)=>new Promise(r=>c.toBlob(r,type,q));
+async function exportCanvas(it){render(it,true);const b=await toBlob(it.canvas,'image/png');return b}
+// 한 장 처리: 인식 + 편집 UI. opts.group 이면 개별 삭제/저장 버튼 생략
+async function addItem(bmp,name,parent,opts={}){
+  const [div,st]=opts.noCard?[parent,opts.st]:card(name);
+  if(!opts.noCard)parent.append(div);
+  const canvas=document.createElement('canvas');canvas.width=bmp.width;canvas.height=bmp.height;
+  const it={bmp,canvas,boxes:[],name};
+  if(opts.noCard){const t=document.createElement('div');t.className='hint';t.textContent=name;div.append(t)}
+  div.append(canvas);render(it);
+  const W=bmp.width,H=bmp.height;
+  let faceFail=false;
+  try{
+    if($('oFace').checked){
+      st.textContent=name+': 얼굴 인식 중…';
+      const fl=await detectFaces(canvas,+$('fq').value,st);
+      if(fl){for(const b of fl)it.boxes.push(pad({x:b.x,y:b.y,w:b.w,h:b.h,t:'face'},W,H,b.w*.25))}
+      else faceFail=true;
+    }
+    const names=nameList();
+    const needText=$('oRrn').checked||$('oPh').checked||$('oGuess').checked||names.length;
+    if(needText){
+      st.textContent=name+': 글자 인식 중… (처음엔 1분 정도 걸릴 수 있어요)';
+      const w=await getWorker(st);
+      const {data}=await w.recognize(canvas);
+      for(const wd of data.words||[]){
+        const t=wd.text.trim();if(!t||wd.confidence<20)continue;
+        let hit=false;const k=t.replace(/[^가-힣A-Za-z0-9@.\-]/g,'');
+        const rx=s=>{const r=new RegExp(s.source,s.flags.replace('g',''));return r.test(t)};
+        // 수정됨: OCR 주민등록번호 조건 강화 (단순 7자리 숫자 오탐 방지)
+        if($('oRrn').checked&&(rx(RRN)||/^\d{6}[-–][1-8]\d{0,6}\**$/.test(k)))hit=true;
+        // 수정됨: OCR 전화번호 최소 길이 9자 제한 추가
+        if($('oPh').checked&&(rx(PH)||rx(EM)||/^01[016789][-.]?\d{3,4}[-.]?\d{0,4}$/.test(k)&&k.length>=9))hit=true;
+        if(names.some(n=>k.includes(n)))hit=true;
+        // 수정됨: OCR 이름 추정 시 3글자 이상만 매칭
+        if(!hit&&$('oGuess').checked&&new RegExp(`^[${SUR}][가-힣]{2}(이|가|은|는|을|를|의|에게|도|와|과)?$`).test(k)&&k.length>=3)hit=true;
+        if(hit){const b=wd.bbox;it.boxes.push(pad({x:b.x0,y:b.y0,w:b.x1-b.x0,h:b.y1-b.y0,t:'text'},W,H,4))}
+      }
+    }
+    st.textContent=`${name}: 자동 인식 ${it.boxes.length}곳. 빨간 상자=가림, 점선=해제됨. 드래그로 추가하세요.`+(faceFail?' ⚠ 얼굴 인식 모델을 불러오지 못했습니다(인터넷 확인) — 얼굴은 직접 드래그해 가려 주세요.':'');
+  }catch(e){console.error(e);st.textContent='자동 인식 중 오류: 수동으로 드래그해 가려 주세요.'}
+  render(it);
+  let sx,sy,drag=false,cur=null;
+  const pos=e=>{const r=canvas.getBoundingClientRect();return[(e.clientX-r.left)*W/r.width,(e.clientY-r.top)*H/r.height]};
+  canvas.onpointerdown=e=>{[sx,sy]=pos(e);drag=true;cur=null;canvas.setPointerCapture(e.pointerId)};
+  canvas.onpointermove=e=>{if(!drag)return;const[x,y]=pos(e);cur={x:Math.min(sx,x),y:Math.min(sy,y),w:Math.abs(x-sx),h:Math.abs(y-sy),on:true,t:'manual'};render(it);const c=canvas.getContext('2d');c.strokeStyle='#2563eb';c.lineWidth=Math.max(2,W/400);c.strokeRect(cur.x,cur.y,cur.w,cur.h)};
+  canvas.onpointerup=e=>{drag=false;const[x,y]=pos(e);
+    if(cur&&cur.w>8&&cur.h>8){it.boxes.push(cur)}
+    else{const hit=[...it.boxes].reverse().find(b=>x>=b.x&&x<=b.x+b.w&&y>=b.y&&y<=b.y+b.h);if(hit)hit.on=!hit.on}
+    cur=null;render(it)};
+  return it;
+}
+const items=[];
+function updAll(){$('dlAll').style.display=items.length>1?'':'none'}
+async function addImage(f){
+  const holder=document.createElement('div');$('list').append(holder);
+  const bmp=await createImageBitmap(f,{imageOrientation:'from-image'});
+  const it=await addItem(bmp,f.name,holder);items.push(it);
+  const div=holder.firstChild,bar=document.createElement('div');
+  const dl=document.createElement('button');dl.className='btn g';dl.textContent='⬇ 저장 (PNG)';dl.onclick=()=>dlOne(it);
+  const rm=document.createElement('button');rm.className='btn s';rm.textContent='🗑 삭제';
+  rm.onclick=()=>{holder.remove();items.splice(items.indexOf(it),1);it.bmp.close();it.canvas.width=it.canvas.height=0;updAll()};
+  bar.append(dl,rm);div.append(bar);updAll();
+}
+async function dlOne(it){const b=await exportCanvas(it);save(b,'가림_'+it.name.replace(/\.[^.]+$/,'')+'.png');render(it)}
+$('dlAll').onclick=async()=>{for(const i of items){await dlOne(i);await wait(500)}};
+$('mode').onchange=()=>{items.forEach(i=>render(i));groups.forEach(g=>g.items.forEach(i=>render(i)))};
+const groups=[];
+function groupCard(title){
+  const [div,st]=card(title);$('list').append(div);
+  const g={div,st,items:[]};groups.push(g);return g;
+}
+function removeGroup(g){g.div.remove();g.items.forEach(i=>{i.bmp.close&&i.bmp.close();i.canvas.width=i.canvas.height=0});g.items=[];groups.splice(groups.indexOf(g),1)}
+// ---- PDF ----
+let pdfReady=false;
+async function initPdf(){
+  if(pdfReady)return;
+  const r=await fetch('https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.worker.min.js');
+  pdfjsLib.GlobalWorkerOptions.workerSrc=URL.createObjectURL(new Blob([await r.text()],{type:'text/javascript'}));
+  pdfReady=true;
+}
+async function addPdf(f){
+  const g=groupCard('📄 '+f.name);
+  try{
+    await initPdf();
+    const doc=await pdfjsLib.getDocument({data:new Uint8Array(await f.arrayBuffer())}).promise;
+    g.st.textContent=`총 ${doc.numPages}쪽 — 쪽마다 인식합니다. (쪽 수가 많으면 오래 걸립니다)`;
+    const box=document.createElement('div');g.div.append(box);
+    for(let p=1;p<=doc.numPages;p++){
+      const page=await doc.getPage(p);const vp=page.getViewport({scale:2});
+      const c=document.createElement('canvas');c.width=Math.round(vp.width);c.height=Math.round(vp.height);
+      await page.render({canvasContext:c.getContext('2d'),viewport:vp}).promise;
+      const bmp=await createImageBitmap(c);c.width=c.height=0;
+      const sub=document.createElement('div');sub.style.marginBottom='12px';box.append(sub);
+      g.items.push(await addItem(bmp,`${p}쪽`,sub,{noCard:true,st:g.st}));
+    }
+    g.st.textContent='검토 후 저장하세요. 저장되는 PDF는 쪽이 이미지로 변환되어 가려진 글자는 복구할 수 없습니다(글자 선택·검색은 불가).';
+    const bar=document.createElement('div');
+    const dl=document.createElement('button');dl.className='btn g';dl.textContent='⬇ PDF 저장';
+    dl.onclick=async()=>{
+      dl.disabled=true;const {jsPDF}=window.jspdf;let pdf=null;
+      for(const it of g.items){
+        render(it,true);const w=it.canvas.width,h=it.canvas.height,o=w>h?'l':'p';
+        if(!pdf)pdf=new jsPDF({orientation:o,unit:'px',format:[w,h],compress:true,hotfixes:['px_scaling']});else pdf.addPage([w,h],o);
+        pdf.addImage(it.canvas.toDataURL('image/jpeg',.92),'JPEG',0,0,w,h);render(it);
+      }
+      save(pdf.output('blob'),'가림_'+f.name.replace(/\.pdf$/i,'')+'.pdf');dl.disabled=false;
+    };
+    const rm=document.createElement('button');rm.className='btn s';rm.textContent='🗑 삭제';rm.onclick=()=>removeGroup(g);
+    bar.append(dl,rm);g.div.append(bar);
+  }catch(e){console.error(e);g.st.textContent='PDF를 읽지 못했습니다(암호화·손상 파일일 수 있음).'}
+}
+// ---- HWPX ----
+async function addHwpx(f){
+  const g=groupCard('📝 '+f.name);
+  try{
+    const zip=await JSZip.loadAsync(await f.arrayBuffer());
+    const names=Object.keys(zip.files);
+    if(!zip.file('mimetype')&&!names.some(n=>n.startsWith('Contents/')))throw new Error('hwpx 아님');
+    // 1) 글자
+    let cnt=0;const xmlOut={};
+    const ser=new XMLSerializer();
+    for(const n of names){
+      if(!/^Contents\/(section\d+|masterpage\d*)\.xml$/i.test(n))continue;
+      const xml=await zip.file(n).async('string');
+      const dom=new DOMParser().parseFromString(xml,'application/xml');
+      if(dom.getElementsByTagName('parsererror').length)continue;
+      const ps=dom.getElementsByTagName('hp:p');
+      for(const p of ps){
+        const nodes=[];
+        for(const run of p.children){
+          if(run.tagName!=='hp:run')continue;
+          for(const t of run.children){
+            if(t.tagName!=='hp:t')continue;
+            for(const tn of t.childNodes)if(tn.nodeType===3)nodes.push(tn);
+          }
+        }
+        if(!nodes.length)continue;
+        for(const tn of nodes){const [r,c]=maskText(tn.data);if(c){tn.data=r;cnt+=c}}
+        const joined=nodes.map(x=>x.data).join('');
+        const [mj,c2]=maskText(joined);
+        if(c2&&mj!==joined){nodes[0].data=mj;for(let i=1;i<nodes.length;i++)nodes[i].data='';cnt+=c2}
+      }
+      let out=ser.serializeToString(dom);
+      if(!out.startsWith('<?xml'))out='<?xml version="1.0" encoding="UTF-8" standalone="yes" ?>'+out;
+      xmlOut[n]=out;
+    }
+    // 2) 이미지
+    const imgNames=names.filter(n=>/^BinData\/.+\.(png|jpe?g|bmp|gif)$/i.test(n));
+    g.st.textContent=`본문에서 ${cnt}곳을 가렸습니다. 문서 속 이미지 ${imgNames.length}개를 검토하세요.`+(imgNames.length?'':' (이미지 없음)');
+    const box=document.createElement('div');g.div.append(box);
+    const imgs=[];
+    for(const n of imgNames){
+      const sub=document.createElement('div');sub.style.marginBottom='12px';box.append(sub);
+      try{
+        const bmp=await createImageBitmap(await zip.file(n).async('blob'));
+        const it=await addItem(bmp,n.split('/').pop(),sub,{noCard:true,st:g.st});it.path=n;imgs.push(it);g.items.push(it);
+      }catch(e){g.st.textContent+=` (${n} 읽기 실패 — 해당 이미지는 원본 그대로이니 문서에서 직접 확인하세요)`}
+    }
+    const note=document.createElement('div');note.className='hint';
+    note.textContent='※ 표 안 글자도 처리합니다. 한 문단에서 이름이 서식 조각으로 나뉜 경우 그 문단의 글자 서식이 하나로 합쳐질 수 있습니다. 미리보기 이미지·미리보기 텍스트는 삭제됩니다. 머리말/꼬리말·각주는 별도 확인을 권장합니다.';
+    g.div.append(note);
+    const bar=document.createElement('div');
+    const dl=document.createElement('button');dl.className='btn g';dl.textContent='⬇ HWPX 저장';
+    dl.onclick=async()=>{
+      dl.disabled=true;
+      for(const n in xmlOut)zip.file(n,xmlOut[n]);
+      for(const it of imgs){
+        const ext=it.path.split('.').pop().toLowerCase();render(it,true);
+        const b=await toBlob(it.canvas,/jpe?g/.test(ext)?'image/jpeg':'image/png',.92);render(it);
+        zip.file(it.path,await b.arrayBuffer());
+      }
+      for(const n of names){if(/^Preview\/PrvImage\./i.test(n))zip.remove(n)}
+      if(zip.file('Preview/PrvText.txt'))zip.file('Preview/PrvText.txt','');
+      if(zip.file('mimetype'))zip.file('mimetype',await zip.file('mimetype').async('string'),{compression:'STORE'});
+      const blob=await zip.generateAsync({type:'blob',mimeType:'application/hwp+zip',compression:'DEFLATE'});
+      save(blob,'가림_'+f.name);dl.disabled=false;
+    };
+    const rm=document.createElement('button');rm.className='btn s';rm.textContent='🗑 삭제';rm.onclick=()=>removeGroup(g);
+    bar.append(dl,rm);g.div.append(bar);
+  }catch(e){console.error(e);g.st.textContent='HWPX를 읽지 못했습니다. (.hwp 파일은 한글에서 “다른 이름으로 저장 → HWPX”로 변환 후 올려 주세요.)'}
+}
+
+// ---- 엑셀(XLSX) ----
+async function addXlsx(f){
+  const g = groupCard('📊 ' + f.name);
+  try {
+    const wb = XLSX.read(await f.arrayBuffer(), {type: 'array'});
+    let cnt = 0;
+    for (const sn of wb.SheetNames) {
+      const sheet = wb.Sheets[sn];
+      if (!sheet['!ref']) continue;
+      const range = XLSX.utils.decode_range(sheet['!ref']);
+      for (let R = range.s.r; R <= range.e.r; ++R) {
+        for (let C = range.s.c; C <= range.e.c; ++C) {
+          const cell = sheet[XLSX.utils.encode_cell({c: C, r: R})];
+          if (cell && (cell.t === 's' || cell.t === 'str') && typeof cell.v === 'string') {
+            const [r, c] = maskText(cell.v);
+            if (c) { cell.v = r; if (cell.w) cell.w = r; cnt += c; }
+          }
+        }
+      }
+    }
+    g.st.textContent = `모든 시트에서 총 ${cnt}곳을 가렸습니다. 확인 후 저장하세요.`;
+    const bar = document.createElement('div');
+    const dl = document.createElement('button'); dl.className = 'btn g'; dl.textContent = '⬇ 엑셀 저장';
+    dl.onclick = () => {
+      const out = XLSX.write(wb, {bookType: 'xlsx', type: 'array'});
+      save(new Blob([out], {type: 'application/octet-stream'}), '가림_' + f.name);
+    };
+    const rm = document.createElement('button'); rm.className = 'btn s'; rm.textContent = '🗑 삭제'; rm.onclick = () => removeGroup(g);
+    bar.append(dl, rm); g.div.append(bar);
+  } catch(e) { console.error(e); g.st.textContent = '엑셀 파일을 읽지 못했습니다. (.xlsx 형식인지 확인해 주세요)'; }
+}
+
+async function add(fs){
+  for(const f of fs){
+    const n=f.name.toLowerCase();
+    if(f.type.startsWith('image/'))await addImage(f);
+    else if(n.endsWith('.pdf'))await addPdf(f);
+    else if(n.endsWith('.hwpx'))await addHwpx(f);
+    else if(n.endsWith('.xlsx'))await addXlsx(f);
+    else if(n.endsWith('.hwp')){const [d,st]=card(f.name);$('list').append(d);st.textContent='.hwp(구형)은 지원하지 않습니다. 한글에서 HWPX로 저장 후 올려 주세요.'}
+  }
+}
+</script>
+</body></html>
