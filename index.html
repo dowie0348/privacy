@@ -34,7 +34,7 @@ canvas{max-width:100%;height:auto;border:1px solid #cbd5e1;border-radius:8px;tou
  <label class="o"><input type="checkbox" id="oPh" checked> 전화번호 · 이메일</label>
  <label class="o"><input type="checkbox" id="oFace" checked> 얼굴 (사진)</label>
  <label class="o" style="margin-left:24px">얼굴 탐색 강도: <select id="fq" style="font-size:15px;padding:6px"><option value="0">빠름 (큰 얼굴만)</option><option value="1">보통</option><option value="2" selected>정밀 (단체사진·작은 얼굴, 느림)</option></select></label>
- <label class="o"><input type="checkbox" id="oGuess"> 이름 자동 추정 (성씨+이름 형태, 오탐 가능)</label>
+ <label class="o"><input type="checkbox" id="oGuess"> 이름 자동 추정 (성씨+이름 형태, 똑똑한 필터링 적용)</label>
  <div class="hint">학생 이름 명단(쉼표·줄바꿈 구분) — 입력하면 가장 정확합니다. 예: 김민빈, 이서준</div>
  <textarea id="names" style="min-height:70px" placeholder="김민빈, 이서준, 박지우"></textarea>
  <div style="margin-top:6px"><button class="btn s" id="rosterBtn">📊 엑셀/CSV 명단 불러오기</button><span class="cnt" id="rosterMsg"></span></div>
@@ -47,7 +47,7 @@ canvas{max-width:100%;height:auto;border:1px solid #cbd5e1;border-radius:8px;tou
 <div class="tabs"><button id="tImg" class="on">🖼 이미지·문서(PDF/HWPX/엑셀)</button><button id="tTxt">📝 텍스트</button></div>
 
 <section id="pImg" class="card">
- <div class="drop" id="drop">여기에 파일을 끌어놓거나 눌러서 선택<br><small>이미지(JPG·PNG·WEBP) · PDF · HWPX · 엑셀(XLSX) (여러 개 가능, 휴대폰은 사진 촬영도 가능)</small></div>
+ <div class="drop" id="drop">여기에 파일을 끌어놓거나, 눌러서 선택하거나, <b>붙여넣기(Ctrl+V)</b> 하세요<br><small>이미지(JPG·PNG·WEBP) · PDF · HWPX · 엑셀(XLSX) (여러 개 가능, 휴대폰은 사진 촬영도 가능)</small></div>
  <input type="file" id="file" accept="image/*,.pdf,application/pdf,.hwpx,.xlsx" multiple hidden>
  <div class="hint">자동 인식 후 <b>미리보기에서 드래그하면 가림 영역 추가</b>, <b>상자를 누르면 해제/복원</b>됩니다. 자동 인식은 100% 정확하지 않으니 반드시 확인 후 저장하세요.</div>
  <div id="list"></div>
@@ -78,7 +78,6 @@ async function getFD(){
   try{
     const m=await import('https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/vision_bundle.mjs');
     const v=await m.FilesetResolver.forVisionTasks('https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm');
-    // 수정됨: 얼굴 인식 신뢰도(minDetectionConfidence)를 0.3에서 0.6으로 높여 엄격하게 판별 (오탐 감소)
     fd=await m.FaceDetector.createFromOptions(v,{baseOptions:{modelAssetPath:'https://storage.googleapis.com/mediapipe-models/face_detector/blaze_face_short_range/float16/1/blaze_face_short_range.tflite'},runningMode:'IMAGE',minDetectionConfidence:.6});
   }catch(e){console.warn(e);fd=null}
   return fd;
@@ -94,7 +93,7 @@ async function detectFaces(src,level,st){
   const addDet=(r,ox,oy,tw,th,whole)=>{for(const k of r.detections){const b=k.boundingBox,sc=k.categories[0].score;
     if(b.width<8||b.height<8)continue;
     const ar=b.width/b.height;if(ar<.5||ar>1.8)continue;
-    if(!whole&&((b.originX<3&&ox>0)||(b.originY<3&&oy>0)||(b.originX+b.width>tw-3&&ox+tw<W)||(b.originY+b.height>th-3&&oy+th<H)))continue; // 타일 경계에 잘린 얼굴 제외
+    if(!whole&&((b.originX<3&&ox>0)||(b.originY<3&&oy>0)||(b.originX+b.width>tw-3&&ox+tw<W)||(b.originY+b.height>th-3&&oy+th<H)))continue;
     found.push({x:ox+b.originX,y:oy+b.originY,w:b.width,h:b.height,score:sc})}};
   addDet(d.detect(src),0,0,W,H,true);
   if(level>0){
@@ -120,8 +119,10 @@ async function detectFaces(src,level,st){
 }
 // ---------- 텍스트 규칙 ----------
 const SUR='김이박최정강조윤장임한오서신권황안송류전홍고문양손배백허유남심노하곽성차주우구민나진지엄채원천방공현함변염여추도소석선설마길연위표명기반왕금옥육인맹제모탁국어은편용예경봉사부황';
+// 금칙어 세트 (이름으로 잘못 인식되기 쉬운 흔한 일반 명사/부사 등)
+const STOPWORDS=new Set(['이상','정말','하지만','그리고','우리가','자신의','모든','어떤','가장','매우','너무','많이','조금','이런','저런','그런','또한','만약','마치','과연','아마','혹시','오직','다만','결코','전혀','도리어','오히려','방금','이제','이미','벌써','미리','항상','자꾸','계속','가끔','종종','갑자기','점점','결국','비로소','반드시','비록','하물며','게다가','대신','대해','관해','따라','위해','인해','의해','통해','경우','사실','이유','원인','결과','목적','방법','문제','해결','역할','기능','효과','영향','중요','필요','조건','상황','환경','기준','규칙','제도','정책','구조','조직','개인','사회','국가','세계','역사','문화','예술','과학','기술','산업','경제','정치','법률','교육','정보','통신','보안','안전','건강','의료','지원','사용','활용','개발','연구','분석','평가','확인','점검','운영','개선','발전','변화','추진','실행','참여','협력','공유','소통','대화','합의','갈등','자유','평등','정의','국민','시민','주민','고객','시장','가격','비용','수익','투자','고용','노동','기업','회사','제품','상품','기계','자연','동물','식물','시간','공간','장소','위치','방향','거리','크기','형태','소리','온도','속도','발생','존재','정도','비율','가능','부분','전체','개념','의미','주의','경고','도움','요청','응답','동의','반대','감사','사과','축하','사랑','마음','기쁨','행복','성공','실패','희망','현실','과거','현재','미래','오늘','내일','지금','아직','매일','주말','휴일','행사','회의','시험','운동','게임','휴식','식사','구매','판매','결제','배송','취소','변경','조회','검색','안내','문의','예약','출발','도착','교통','버스','기차','도로','사고','보험','치료','병원','증상','수술','정상','위험','완료','오류','수정','설치','삭제','저장','시작','종료','설정','나이','주소','전화','게시','댓글','목록','다음','이전','관리','대표','회원','이것','저것','그것','무엇','누구','어디','언제','어떻게','이곳','저곳','그곳','이쪽','저쪽','그쪽','이번','저번','그번','이분','저분','그분','사람']);
+
 const RRN=/\d{6}\s*[-–]\s*[1-8]\d{6}|\b\d{6}[1-8]\d{6}\b/g;
-// 수정됨: 전화번호 정규식에 부정형 전후방 탐색 추가 (긴 숫자 일부 매칭 방지)
 const PH=/(?<!\d)(01[016789][-.\s]?\d{3,4}[-.\s]?\d{4}|0\d{1,2}[-.\s]\d{3,4}[-.\s]\d{4})(?!\d)/g;
 const EM=/[\w.+-]+@[\w-]+(\.[\w-]+)+/g;
 function nameList(){return $('names').value.split(/[,\n、;]+/).map(s=>s.trim()).filter(s=>s.length>=2)}
@@ -134,9 +135,12 @@ function maskText(t){
     t=t.replace(new RegExp(n.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'),'g'),()=>bump(maskName(n)));
   }
   if($('oGuess').checked){
-    // 수정됨: 이름 길이를 성+이름 2글자로 고정 (3글자 이름만 추정, '이상', '정말' 등 일반단어 오탐 방지)
-    t=t.replace(new RegExp(`(?<![가-힣])([${SUR}][가-힣]{2})(?=\\s|$|[이가은는을를의에께야아도와과,.!?)])`,'g'),(m)=>{
-      if(/\*/.test(m))return m;return bump(maskName(m))});
+    // 수정됨: 이름 길이를 성(1)+이름(1~2)자로 유연화, 그리고 금칙어 목록(STOPWORDS)에 있으면 제외하여 오탐 최소화
+    t=t.replace(new RegExp(`(?<![가-힣])([${SUR}][가-힣]{1,2})(?=\\s|$|[이가은는을를의에께야아도와과,.!?)])`,'g'),(m)=>{
+      if(/\*/.test(m))return m;
+      if(STOPWORDS.has(m))return m;
+      return bump(maskName(m));
+    });
   }
   return [t,c];
 }
@@ -163,6 +167,15 @@ drop.ondragover=e=>{e.preventDefault();drop.classList.add('hv')};
 drop.ondragleave=()=>drop.classList.remove('hv');
 drop.ondrop=e=>{e.preventDefault();drop.classList.remove('hv');add([...e.dataTransfer.files])};
 file.onchange=()=>{add([...file.files]);file.value=''};
+
+// 붙여넣기(Ctrl+V) 기능 추가
+window.addEventListener('paste', e => {
+  const files = e.clipboardData?.files;
+  if (files && files.length > 0) {
+    add([...files]);
+  }
+});
+
 // ---- 명단 ----
 $('rosterBtn').onclick=()=>$('roster').click();
 $('roster').onchange=async e=>{
@@ -233,13 +246,18 @@ async function addItem(bmp,name,parent,opts={}){
         const t=wd.text.trim();if(!t||wd.confidence<20)continue;
         let hit=false;const k=t.replace(/[^가-힣A-Za-z0-9@.\-]/g,'');
         const rx=s=>{const r=new RegExp(s.source,s.flags.replace('g',''));return r.test(t)};
-        // 수정됨: OCR 주민등록번호 조건 강화 (단순 7자리 숫자 오탐 방지)
         if($('oRrn').checked&&(rx(RRN)||/^\d{6}[-–][1-8]\d{0,6}\**$/.test(k)))hit=true;
-        // 수정됨: OCR 전화번호 최소 길이 9자 제한 추가
         if($('oPh').checked&&(rx(PH)||rx(EM)||/^01[016789][-.]?\d{3,4}[-.]?\d{0,4}$/.test(k)&&k.length>=9))hit=true;
         if(names.some(n=>k.includes(n)))hit=true;
-        // 수정됨: OCR 이름 추정 시 3글자 이상만 매칭
-        if(!hit&&$('oGuess').checked&&new RegExp(`^[${SUR}][가-힣]{2}(이|가|은|는|을|를|의|에게|도|와|과)?$`).test(k)&&k.length>=3)hit=true;
+        
+        // 수정됨: OCR 이름 추정 시 정규식 유연화 및 금칙어 필터링 적용
+        if(!hit&&$('oGuess').checked){
+          const m = k.match(new RegExp(`^([${SUR}][가-힣]{1,2})(이|가|은|는|을|를|의|에게|도|와|과)?$`));
+          if(m && m[1].length >= 2 && !STOPWORDS.has(m[1])){
+            hit=true;
+          }
+        }
+        
         if(hit){const b=wd.bbox;it.boxes.push(pad({x:b.x0,y:b.y0,w:b.x1-b.x0,h:b.y1-b.y0,t:'text'},W,H,4))}
       }
     }
